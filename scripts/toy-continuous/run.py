@@ -1,17 +1,8 @@
-import gym
 import jax
 import tax
-import optax
 import hydra
 import tqdm
-import jax.numpy as jnp
-import numpy as np
-import haiku as hk
-
-from jax import jit
-from functools import partial
 from mlrec.recorder import Recorder
-from gym.vector import AsyncVectorEnv
 from common import setup
 from common import save_conf
 
@@ -19,8 +10,7 @@ from common import save_conf
 tax.set_platform("cpu")
 
 
-
-@hydra.main(config_path=".", config_name="conf")
+@hydra.main(config_path="conf", config_name="conf")
 def main(conf):
     rng = jax.random.PRNGKey(conf.seed)
     rec = Recorder(output_dir=".")
@@ -41,6 +31,7 @@ def main(conf):
         info_eval = alg['evaluation'](rng_eval, state.params['policy'])
         info = S.get()
         info.update(info_eval)
+        info['epoch'] = e
         rec.write(info)
 
 

@@ -14,8 +14,8 @@ value_opt_kwargs:
   learning_rate: 5e-3
 policy_kwargs:
   hidden_sizes:
-    - 64
-    - 64
+    - 128
+    - 128
   activation: silu
   logstd_min: -10.0
   logstd_max: 1.0
@@ -26,8 +26,8 @@ policy_kwargs:
 
 value_kwargs:
   hidden_sizes:
-    - 32
-    - 32
+    - 128
+    - 128
 
 # -- Related to PPO
 
