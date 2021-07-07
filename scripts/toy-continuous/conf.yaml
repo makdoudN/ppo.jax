@@ -1,0 +1,49 @@
+seed: 42
+name: A2C-Continuous
+logdir: outputs
+maxsteps: 5000000
+nepochs: 100
+env: Pendulum-v0
+num_envs: 8
+
+policy_opt: adabelief
+policy_opt_kwargs:
+  learning_rate: 5e-3
+value_opt: adabelief
+value_opt_kwargs:
+  learning_rate: 5e-3
+policy_kwargs:
+  hidden_sizes:
+    - 64
+    - 64
+  activation: silu
+  logstd_min: -10.0
+  logstd_max: 1.0
+  fixed_std_value: 1.0
+  fixed_std: False
+  state_dependent_std: True
+  use_tanh_bijector: False
+
+value_kwargs:
+  hidden_sizes:
+    - 32
+    - 32
+
+# -- Related to PPO
+
+horizon: 100
+reward_scaling: 1.0
+lambda_: 0.95
+discount_factor: 0.99
+value_cost: 0.5
+entropy_cost: 0.001
+epsilon_ppo: 0.02
+minibatch_ppo: 32
+epoch_ppo: 5
+
+# -- Hydra Configuration.
+
+hydra:
+  run:
+    dir: ${logdir}/${name}-${env}/${now:%Y.%m.%d}-${now:%H.%M.%S}-seed-${seed}
+
