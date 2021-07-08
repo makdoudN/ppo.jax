@@ -4,14 +4,14 @@ import jax
 import chex
 import rlax
 import tree
-import numpy as np
+import optax
 import jax.numpy as jnp
 import typing
 
 from jax import jit
 from jax import vmap
-from jax import grad
 from jax import partial
+from jax.experimental.optimizers import clip_grads
 from rlax import truncated_generalized_advantage_estimation
 
 vmap_gae = vmap(truncated_generalized_advantage_estimation, (1, 1, None, 1), 1)
@@ -126,5 +126,69 @@ def loss_ppo_def(
 
     metrics = dict(ppo_loss=loss, policy_loss=loss_CPI, value_loss=loss_V, H_loss=loss_H)
     return loss, metrics
+
+
+@partial(jit, static_argnums=(2, 3, 4, 5, 6, 7, 8))
+def update_ppo(
+    state: State,
+    data: Batch,
+    policy_opt: optax.TransformUpdateFn,
+    value_opt: optax.TransformUpdateFn,
+    loss_kwargs: dict,
+    process_data_kwargs: dict,
+    niters: int = 5,
+    minibatch_size: int = 32,
+    max_grad_norm: float = -1.
+):
+    loss_fn = partial(loss_ppo_def, **loss_kwargs)
+
+    @jit
+    def update_fn(state, batch):
+        grad, metrics = jax.grad(loss_fn, has_aux=True)(state.params, batch)
+        if max_grad_norm > 0.0:
+            grad = clip_grads(grad, max_grad_norm)
+        updates, value_opt_state = value_opt(grad['value'], state.opt_state['value'])
+        value_params = jax.tree_multimap(lambda p, u: p + u, state.params['value'], updates)
+        updates, policy_opt_state = policy_opt(grad['policy'], state.opt_state['policy'])
+        policy_params = jax.tree_multimap(lambda p, u: p + u, state.params['policy'], updates)
+        params = state.params
+        params = dict(policy=policy_params, value=value_params)
+        opt_state = state.opt_state
+        opt_state = dict(policy=policy_opt_state, value=value_opt_state)
+        state = state.replace(params=params, opt_state=opt_state)
+        return state, metrics
+
+    @jit
+    def _step(carry, xs):
+        state, batch = carry
+        minibatch = tree.map_structure(lambda v: v[xs], batch)
+        state, info = update_fn(state, minibatch)
+        carry = (state, batch)
+        return carry, info
+
+    @jit
+    def _train_one_epoch(carry, xs):
+        state, batch      = carry
+        key, subkey       = jax.random.split(state.key, 2)
+        n                 = batch['observation'].shape[0]
+        index             = jnp.arange(n)
+        indexes           = jax.random.permutation(subkey, index)
+        indexes           = jnp.stack(
+            jnp.array_split(indexes, n / minibatch_size)
+        )
+
+        state  = state.replace(key=key)
+        _carry = (state, batch)
+        _xs    = indexes
+        (state, batch), info = jax.lax.scan(_step, _carry, _xs)    
+        carry = (state, batch)
+        return carry, info
+
+    batch = partial(process_data, **process_data_kwargs)(state.params, data)
+    carry = (state, batch)
+    xs    = jnp.arange(niters)
+    (state, _), info = jax.lax.scan(_train_one_epoch, carry, xs)
+    info = tree.map_structure(lambda v: jnp.mean(v), info)
+    return state, info
 
 

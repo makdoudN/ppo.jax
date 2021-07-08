@@ -2,7 +2,7 @@ import jax
 import numpy as np
 
 
-def evaluation(rng, env, policy, niters: int = 5):
+def gym_evaluation(rng, env, policy, niters: int = 5):
     action_type = env.action_space.__class__.__name__
     all_scores = []
     for _ in range(niters):
